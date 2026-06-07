@@ -30,7 +30,9 @@ export default function GardenCheckPage() {
   const [submittedDetails, setSubmittedDetails] = useState<CustomerLeadDetails | null>(null);
   const [emailSent, setEmailSent] = useState<boolean | null>(null);
   const [previews, setPreviews] = useState<Array<{ name: string; url: string }>>([]);
+  const [photoHint, setPhotoHint] = useState("Please upload at least 2 garden photos.");
   const formRef = useRef<HTMLFormElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const nextPreviews = photos.map((file) => ({ name: file.name, url: URL.createObjectURL(file) }));
@@ -46,16 +48,55 @@ export default function GardenCheckPage() {
 
     if (!files) return;
 
-    const selected = Array.from(files).slice(0, maxPhotos);
+    const remainingSlots = maxPhotos - photos.length;
+    const incoming = Array.from(files);
+    const selected = incoming.slice(0, Math.max(remainingSlots, 0));
     const invalid = selected.find((file) => !file.type.startsWith("image/"));
 
     if (invalid) {
       setError("Please upload images only.");
+      if (photoInputRef.current) photoInputRef.current.value = "";
+      return;
+    }
+
+    if (incoming.length > remainingSlots) {
+      setPhotoHint("You can upload up to 4 photos.");
+    }
+
+    if (selected.length === 0) {
+      if (photoInputRef.current) photoInputRef.current.value = "";
       return;
     }
 
     const compressed = await Promise.all(selected.map((file) => compressImage(file)));
-    setPhotos(compressed);
+    setPhotos((currentPhotos) => {
+      const nextPhotos = [...currentPhotos, ...compressed].slice(0, maxPhotos);
+      const hitUploadLimit = incoming.length > remainingSlots;
+      const nextHint = hitUploadLimit
+        ? "You can upload up to 4 photos."
+        : nextPhotos.length < minPhotos
+          ? "Please upload at least 2 garden photos."
+          : `${nextPhotos.length} photo${nextPhotos.length === 1 ? "" : "s"} selected.`;
+
+      setPhotoHint(nextHint);
+      return nextPhotos;
+    });
+
+    if (photoInputRef.current) photoInputRef.current.value = "";
+  }
+
+  function removePhoto(indexToRemove: number) {
+    setPhotos((currentPhotos) => {
+      const nextPhotos = currentPhotos.filter((_, index) => index !== indexToRemove);
+      setPhotoHint(
+        nextPhotos.length < minPhotos
+          ? "Please upload at least 2 garden photos."
+          : `${nextPhotos.length} photo${nextPhotos.length === 1 ? "" : "s"} selected.`
+      );
+      return nextPhotos;
+    });
+
+    if (photoInputRef.current) photoInputRef.current.value = "";
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -93,6 +134,7 @@ export default function GardenCheckPage() {
       setEmailSent(Boolean(payload.emailSent));
       formRef.current?.reset();
       setPhotos([]);
+      setPhotoHint("Please upload at least 2 garden photos.");
     } catch (submissionError) {
       setError(
         submissionError instanceof Error
@@ -167,6 +209,7 @@ export default function GardenCheckPage() {
                     JPG, PNG or WebP. We shrink large photos before upload where possible.
                   </span>
                   <input
+                    ref={photoInputRef}
                     className="sr-only"
                     name="photos"
                     type="file"
@@ -175,17 +218,30 @@ export default function GardenCheckPage() {
                     onChange={(event) => handlePhotoChange(event.target.files)}
                   />
                 </label>
+                <p className="mt-2 text-sm text-ink/60">{photoHint}</p>
 
                 {previews.length > 0 && (
                   <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    {previews.map((preview) => (
-                      <div key={preview.url} className="overflow-hidden rounded-md border border-ink/10">
+                    {previews.map((preview, index) => (
+                      <div
+                        key={preview.url}
+                        className="relative overflow-hidden rounded-md border border-ink/10 bg-paper"
+                      >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={preview.url}
                           alt={preview.name}
                           className="aspect-square w-full object-cover"
                         />
+                        <button
+                          type="button"
+                          onClick={() => removePhoto(index)}
+                          className="focus-ring absolute right-2 top-2 rounded-full bg-white/95 px-2.5 py-1 text-xs font-semibold text-ink shadow-sm transition hover:bg-leaf hover:text-white"
+                          aria-label={`Remove ${preview.name}`}
+                        >
+                          Remove
+                        </button>
+                        <p className="truncate px-2 py-2 text-xs text-ink/65">{preview.name}</p>
                       </div>
                     ))}
                   </div>
