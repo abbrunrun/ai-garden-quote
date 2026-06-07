@@ -12,6 +12,7 @@ import type {
   AccessType,
   CustomerLeadDetails,
   GardenAiResult,
+  ServiceNeed,
   Urgency,
   WasteRemoval
 } from "@/lib/types";
@@ -19,6 +20,19 @@ import type {
 const urgencyOptions: Urgency[] = ["ASAP", "This week", "This month", "Just checking"];
 const wasteOptions: WasteRemoval[] = ["Yes", "No", "Not sure"];
 const accessOptions: AccessType[] = ["Rear access", "Through house", "Not sure"];
+const serviceNeedOptions: ServiceNeed[] = [
+  "Lawn mowing / grass cutting",
+  "Hedge trimming",
+  "Weeding / border tidy",
+  "General garden tidy-up",
+  "Overgrown garden clearance",
+  "Green waste removal",
+  "Regular garden maintenance",
+  "Jet washing / patio cleaning",
+  "Fence repair / small outdoor repair",
+  "Planting / seasonal refresh",
+  "Not sure - let AI suggest"
+];
 const maxPhotos = 4;
 const minPhotos = 2;
 
@@ -198,6 +212,7 @@ export default function GardenCheckPage() {
               <ChoiceGroup label="Urgency" name="urgency" options={urgencyOptions} />
               <ChoiceGroup label="Green waste removal" name="wasteRemoval" options={wasteOptions} />
               <ChoiceGroup label="Access" name="access" options={accessOptions} />
+              <ServiceNeedsGroup />
 
               <div>
                 <label className="block text-sm font-semibold text-ink">
@@ -342,6 +357,33 @@ function ChoiceGroup({
   );
 }
 
+function ServiceNeedsGroup() {
+  return (
+    <fieldset>
+      <legend className="text-sm font-semibold text-ink">What do you need help with?</legend>
+      <p className="mt-1 text-sm text-ink/60">
+        Choose one or more. If you're not sure, let the AI suggest it from your photos.
+      </p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {serviceNeedOptions.map((option) => (
+          <label
+            key={option}
+            className="flex cursor-pointer items-start gap-3 rounded-md border border-ink/12 bg-paper px-3 py-3 text-sm text-ink transition has-[:checked]:border-leaf has-[:checked]:bg-leaf has-[:checked]:text-white"
+          >
+            <input
+              type="checkbox"
+              name="selected_service_needs"
+              value={option}
+              className="mt-0.5 size-4 shrink-0 accent-leaf"
+            />
+            <span>{option}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 function Result({
   result,
   details,
@@ -356,6 +398,7 @@ function Result({
   const estimatedArea = formatEstimatedArea(result.estimated_area_sqm);
   const whatsAppSummary = buildCustomerWhatsAppSummary(details, result);
   const gardenerSummary = buildGardenerInternalSummary(details, result);
+  const selectedServices = getSelectedServices(details, result);
 
   return (
     <div className="space-y-6">
@@ -371,6 +414,10 @@ function Result({
         <ResultStat label="Garden size" value={result.size_category} />
         <ResultStat label="Estimated area" value={estimatedArea} />
       </div>
+
+      <ResultSection title="Selected services">
+        <p>{selectedServices.join(", ")}</p>
+      </ResultSection>
 
       <ResultSection title="Garden condition">
         {result.visible_issues.length > 0 ? (
@@ -395,6 +442,22 @@ function Result({
       <ResultSection title="Starting range">
         <p className="text-xl font-semibold text-ink">{result.starting_price_range}</p>
       </ResultSection>
+
+      {result.budget_friendly_option && (
+        <ResultSection title="Budget-friendly option">
+          <p>{result.budget_friendly_option}</p>
+        </ResultSection>
+      )}
+
+      {result.recommended_add_ons.length > 0 && (
+        <ResultSection title="Recommended add-ons">
+          <ul className="space-y-2">
+            {result.recommended_add_ons.map((addOn) => (
+              <li key={addOn}>- {addOn}</li>
+            ))}
+          </ul>
+        </ResultSection>
+      )}
 
       <ResultSection title="Why this range">
         <p>{buildRangeReason(result, estimatedArea)}</p>
@@ -536,8 +599,13 @@ function GardenerLeadSummaryCard({
         <SummaryFact label="Urgency" value={details.urgency} />
         <SummaryFact label="Access" value={details.access} />
         <SummaryFact label="Green waste removal" value={details.wasteRemoval} />
+        <SummaryFact label="Selected services" value={getSelectedServices(details, result).join(", ")} />
         <SummaryFact label="Recommended service" value={result.recommended_service} />
         <SummaryFact label="Starting price range" value={result.starting_price_range} />
+        <SummaryFact
+          label="Budget-friendly option"
+          value={result.budget_friendly_option || "Not provided"}
+        />
       </div>
 
       <div className="mt-4 space-y-4 text-sm leading-6 text-ink/72">
@@ -551,6 +619,26 @@ function GardenerLeadSummaryCard({
             )}
           </ul>
         </div>
+        {result.recommended_add_ons.length > 0 && (
+          <div>
+            <p className="font-semibold text-ink">Recommended add-ons</p>
+            <ul className="mt-1 space-y-1">
+              {result.recommended_add_ons.map((addOn) => (
+                <li key={addOn}>- {addOn}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {result.follow_up_questions.length > 0 && (
+          <div>
+            <p className="font-semibold text-ink">Follow-up questions</p>
+            <ul className="mt-1 space-y-1">
+              {result.follow_up_questions.map((question) => (
+                <li key={question}>- {question}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <SummaryText title="Internal note for gardener" body={result.internal_note_for_gardener} />
         <SummaryText title="Suggested gardener reply" body={result.suggested_gardener_reply} />
       </div>
@@ -656,7 +744,8 @@ function readSubmittedDetails(formData: FormData): CustomerLeadDetails {
     roughSize: readText(formData, "roughSize"),
     urgency: readChoice(formData, "urgency", urgencyOptions),
     wasteRemoval: readChoice(formData, "wasteRemoval", wasteOptions),
-    access: readChoice(formData, "access", accessOptions)
+    access: readChoice(formData, "access", accessOptions),
+    selectedServiceNeeds: readServiceNeeds(formData)
   };
 }
 
@@ -673,6 +762,21 @@ function readChoice<T extends string>(formData: FormData, key: string, options: 
   }
 
   return options[0];
+}
+
+function readServiceNeeds(formData: FormData): ServiceNeed[] {
+  const values = formData
+    .getAll("selected_service_needs")
+    .filter((value): value is string => typeof value === "string")
+    .filter((value): value is ServiceNeed => serviceNeedOptions.includes(value as ServiceNeed));
+
+  return values.length > 0 ? values : ["Not sure - let AI suggest"];
+}
+
+function getSelectedServices(details: CustomerLeadDetails, result: GardenAiResult) {
+  return result.selected_service_needs.length > 0
+    ? result.selected_service_needs
+    : details.selectedServiceNeeds;
 }
 
 async function copyText(text: string, setCopied: (value: boolean) => void) {

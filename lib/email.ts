@@ -100,11 +100,17 @@ function buildEmailText(
     `Urgency: ${details.urgency}`,
     `Access: ${details.access}`,
     `Green waste removal: ${details.wasteRemoval}`,
+    `Selected services: ${formatSelectedServices(details, result)}`,
     `Recommended service: ${result.recommended_service}`,
     `Starting price range: ${result.starting_price_range}`,
+    `Budget-friendly option: ${result.budget_friendly_option || "Not provided"}`,
+    `Recommended add-ons: ${formatInlineList(result.recommended_add_ons)}`,
     "",
     "Visible issues:",
     formatList(result.visible_issues),
+    "",
+    "Follow-up questions:",
+    formatList(result.follow_up_questions),
     "",
     "AI internal note:",
     result.internal_note_for_gardener || "Not available",
@@ -120,4 +126,17 @@ function buildEmailText(
 function formatList(items: string[]) {
   if (items.length === 0) return "- Needs confirmation";
   return items.map((item) => `- ${item}`).join("\n");
+}
+
+function formatInlineList(items: string[]) {
+  return items.length > 0 ? items.join(", ") : "Not provided";
+}
+
+function formatSelectedServices(details: CustomerLeadDetails, result: GardenAiResult) {
+  const services =
+    result.selected_service_needs.length > 0
+      ? result.selected_service_needs
+      : details.selectedServiceNeeds;
+
+  return services.join(", ");
 }

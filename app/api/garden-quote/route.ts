@@ -7,6 +7,7 @@ import type {
   AccessType,
   CustomerLeadDetails,
   LeadInsert,
+  ServiceNeed,
   Urgency,
   WasteRemoval
 } from "@/lib/types";
@@ -18,6 +19,19 @@ const MAX_FILE_SIZE = 15 * 1024 * 1024;
 const URGENCIES: Urgency[] = ["ASAP", "This week", "This month", "Just checking"];
 const WASTE_OPTIONS: WasteRemoval[] = ["Yes", "No", "Not sure"];
 const ACCESS_OPTIONS: AccessType[] = ["Rear access", "Through house", "Not sure"];
+const SERVICE_NEEDS: ServiceNeed[] = [
+  "Lawn mowing / grass cutting",
+  "Hedge trimming",
+  "Weeding / border tidy",
+  "General garden tidy-up",
+  "Overgrown garden clearance",
+  "Green waste removal",
+  "Regular garden maintenance",
+  "Jet washing / patio cleaning",
+  "Fence repair / small outdoor repair",
+  "Planting / seasonal refresh",
+  "Not sure - let AI suggest"
+];
 const SUPABASE_UNAVAILABLE_WARNING = "Supabase unavailable, lead not saved.";
 
 export async function POST(request: Request) {
@@ -30,7 +44,8 @@ export async function POST(request: Request) {
       roughSize: readText(formData, "roughSize"),
       urgency: readChoice(formData, "urgency", URGENCIES),
       wasteRemoval: readChoice(formData, "wasteRemoval", WASTE_OPTIONS),
-      access: readChoice(formData, "access", ACCESS_OPTIONS)
+      access: readChoice(formData, "access", ACCESS_OPTIONS),
+      selectedServiceNeeds: readChoices(formData, "selected_service_needs", SERVICE_NEEDS)
     };
     const files = formData.getAll("photos").filter((value): value is File => value instanceof File);
 
@@ -79,6 +94,10 @@ export async function POST(request: Request) {
     });
     const finalAiResult = {
       ...aiResult,
+      selected_service_needs:
+        aiResult.selected_service_needs.length > 0
+          ? aiResult.selected_service_needs
+          : details.selectedServiceNeeds,
       lead_score: leadScore
     };
     const emailSent = await sendGardenerLeadEmail(details, finalAiResult).catch((error) => {
@@ -111,15 +130,7 @@ async function optionallySaveLead({
   preparedImages,
   finalAiResult
 }: {
-  details: {
-    name: string;
-    contact: string;
-    postcode: string;
-    roughSize: string;
-    urgency: Urgency;
-    wasteRemoval: WasteRemoval;
-    access: AccessType;
-  };
+  details: CustomerLeadDetails;
   preparedImages: Array<{
     bytes: Buffer;
     mimeType: string;
@@ -204,6 +215,15 @@ function readChoice<T extends string>(formData: FormData, key: string, options: 
   }
 
   return options[0];
+}
+
+function readChoices<T extends string>(formData: FormData, key: string, options: T[]) {
+  const values = formData
+    .getAll(key)
+    .filter((value): value is string => typeof value === "string")
+    .filter((value): value is T => options.includes(value as T));
+
+  return values.length > 0 ? values : (["Not sure - let AI suggest"] as T[]);
 }
 
 function extensionFor(mimeType: string) {

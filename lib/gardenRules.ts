@@ -13,6 +13,9 @@ export function emptyAiResult(overrides: Partial<GardenAiResult> = {}): GardenAi
   return {
     customer_reply:
       "Thanks for sending the photos. I can give an initial range from what I can see, but a few details still need checking before a final quote.",
+    selected_service_needs: [],
+    budget_friendly_option: "",
+    recommended_add_ons: [],
     visible_issues: DEFAULT_VISIBLE_ISSUES,
     estimated_area_sqm: "Needs confirmation",
     size_category: "Unknown",
@@ -38,6 +41,18 @@ export function normalizeAiResult(value: unknown): GardenAiResult {
   const source = typeof value === "object" && value !== null ? value as Partial<GardenAiResult> : {};
 
   return {
+    selected_service_needs: stringArrayOr(
+      source.selected_service_needs,
+      fallback.selected_service_needs
+    ),
+    budget_friendly_option: stringOr(
+      source.budget_friendly_option,
+      fallback.budget_friendly_option
+    ),
+    recommended_add_ons: stringArrayOr(
+      source.recommended_add_ons,
+      fallback.recommended_add_ons
+    ),
     customer_reply: stringOr(source.customer_reply, fallback.customer_reply),
     visible_issues: stringArrayOr(source.visible_issues, fallback.visible_issues),
     estimated_area_sqm: stringOr(source.estimated_area_sqm, fallback.estimated_area_sqm),
