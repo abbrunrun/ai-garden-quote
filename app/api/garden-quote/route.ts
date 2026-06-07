@@ -1,24 +1,27 @@
 import { NextResponse } from "next/server";
-import { analyzeGardenLead } from "@/lib/openaiGarden";
-import { calculateLeadScore } from "@/lib/gardenRules";
+import { buildGardenEstimate, calculateLeadScore } from "@/lib/gardenRules";
 import { sendGardenerLeadEmail } from "@/lib/email";
-import { createSupabaseAdmin, GARDEN_UPLOAD_BUCKET } from "@/lib/supabaseServer";
+import { createSupabaseAdmin } from "@/lib/supabaseServer";
 import type {
   AccessType,
   CustomerLeadDetails,
   LeadInsert,
   ServiceNeed,
   Urgency,
+  VisitType,
   WasteRemoval
 } from "@/lib/types";
 
 export const runtime = "nodejs";
 
-const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-const MAX_FILE_SIZE = 15 * 1024 * 1024;
 const URGENCIES: Urgency[] = ["ASAP", "This week", "This month", "Just checking"];
 const WASTE_OPTIONS: WasteRemoval[] = ["Yes", "No", "Not sure"];
 const ACCESS_OPTIONS: AccessType[] = ["Rear access", "Through house", "Not sure"];
+const VISIT_TYPES: VisitType[] = [
+  "One-off tidy-up",
+  "Regular maintenance",
+  "Not sure yet"
+];
 const SERVICE_NEEDS: ServiceNeed[] = [
   "Lawn mowing / grass cutting",
   "Hedge trimming",
@@ -30,7 +33,7 @@ const SERVICE_NEEDS: ServiceNeed[] = [
   "Jet washing / patio cleaning",
   "Fence repair / small outdoor repair",
   "Planting / seasonal refresh",
-  "Not sure - let AI suggest"
+  "Not sure - suggest a service"
 ];
 const SUPABASE_UNAVAILABLE_WARNING = "Supabase unavailable, lead not saved.";
 
@@ -45,46 +48,18 @@ export async function POST(request: Request) {
       urgency: readChoice(formData, "urgency", URGENCIES),
       wasteRemoval: readChoice(formData, "wasteRemoval", WASTE_OPTIONS),
       access: readChoice(formData, "access", ACCESS_OPTIONS),
-      selectedServiceNeeds: readChoices(formData, "selected_service_needs", SERVICE_NEEDS)
+      selectedServiceNeeds: readChoices(formData, "selected_service_needs", SERVICE_NEEDS),
+      visitType: readChoice(formData, "visit_type", VISIT_TYPES),
+      photoStatus: "Photos not collected at this stage"
     };
-    const files = formData.getAll("photos").filter((value): value is File => value instanceof File);
 
     if (!details.name || !details.contact || !details.roughSize) {
       return errorResponse("Please add your name, contact detail and rough garden size.", 400);
     }
 
-    if (files.length < 2 || files.length > 4) {
-      return errorResponse("Please upload between 2 and 4 garden photos.", 400);
-    }
-
-    for (const file of files) {
-      if (!ALLOWED_TYPES.has(file.type)) {
-        return errorResponse("Only JPG, PNG and WebP images are accepted.", 400);
-      }
-
-      if (file.size > MAX_FILE_SIZE) {
-        return errorResponse("Each photo must be 15 MB or less.", 400);
-      }
-    }
-
-    const preparedImages = await Promise.all(
-      files.map(async (file) => {
-        const bytes = Buffer.from(await file.arrayBuffer());
-
-        return {
-          bytes,
-          mimeType: file.type,
-          dataUrl: `data:${file.type};base64,${bytes.toString("base64")}`
-        };
-      })
-    );
-
-    const aiResult = await analyzeGardenLead(
-      details,
-      preparedImages.map(({ dataUrl, mimeType }) => ({ dataUrl, mimeType }))
-    );
+    const aiResult = buildGardenEstimate(details);
     const leadScore = calculateLeadScore({
-      photoCount: files.length,
+      photoCount: 0,
       roughSize: details.roughSize,
       postcode: details.postcode,
       urgency: details.urgency,
@@ -94,10 +69,6 @@ export async function POST(request: Request) {
     });
     const finalAiResult = {
       ...aiResult,
-      selected_service_needs:
-        aiResult.selected_service_needs.length > 0
-          ? aiResult.selected_service_needs
-          : details.selectedServiceNeeds,
       lead_score: leadScore
     };
     const emailSent = await sendGardenerLeadEmail(details, finalAiResult).catch((error) => {
@@ -107,7 +78,6 @@ export async function POST(request: Request) {
 
     const leadId = await optionallySaveLead({
       details,
-      preparedImages,
       finalAiResult
     });
 
@@ -127,14 +97,9 @@ export async function POST(request: Request) {
 
 async function optionallySaveLead({
   details,
-  preparedImages,
   finalAiResult
 }: {
   details: CustomerLeadDetails;
-  preparedImages: Array<{
-    bytes: Buffer;
-    mimeType: string;
-  }>;
   finalAiResult: LeadInsert["ai_result"];
 }) {
   if (process.env.SKIP_SUPABASE === "true") {
@@ -144,25 +109,6 @@ async function optionallySaveLead({
 
   try {
     const supabase = createSupabaseAdmin();
-    const imagePaths: string[] = [];
-    const leadFolder = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}`;
-
-    for (const [index, image] of preparedImages.entries()) {
-      const extension = extensionFor(image.mimeType);
-      const path = `${leadFolder}/photo-${index + 1}.${extension}`;
-      const { error } = await supabase.storage
-        .from(GARDEN_UPLOAD_BUCKET)
-        .upload(path, image.bytes, {
-          contentType: image.mimeType,
-          upsert: false
-        });
-
-      if (error) {
-        throw new Error(`Supabase upload failed: ${error.message}`);
-      }
-
-      imagePaths.push(path);
-    }
 
     const lead: LeadInsert = {
       name: details.name,
@@ -173,7 +119,7 @@ async function optionallySaveLead({
       waste_removal: details.wasteRemoval,
       access: details.access,
       status: "New",
-      image_paths: imagePaths,
+      image_paths: [],
       ai_result: finalAiResult,
       customer_reply: finalAiResult.customer_reply,
       visible_issues: finalAiResult.visible_issues,
@@ -223,13 +169,7 @@ function readChoices<T extends string>(formData: FormData, key: string, options:
     .filter((value): value is string => typeof value === "string")
     .filter((value): value is T => options.includes(value as T));
 
-  return values.length > 0 ? values : (["Not sure - let AI suggest"] as T[]);
-}
-
-function extensionFor(mimeType: string) {
-  if (mimeType === "image/png") return "png";
-  if (mimeType === "image/webp") return "webp";
-  return "jpg";
+  return values.length > 0 ? values : (["Not sure - suggest a service"] as T[]);
 }
 
 function errorResponse(message: string, status: number) {

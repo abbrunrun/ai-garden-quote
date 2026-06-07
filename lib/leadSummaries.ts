@@ -27,6 +27,7 @@ Contact: ${details.contact}
 Postcode: ${details.postcode || "Not provided"}
 
 Selected services: ${formatSelectedServices(details, result)}
+Visit type: ${details.visitType}
 
 Garden size: ${details.roughSize}
 Estimated area: ${formatEstimatedArea(result.estimated_area_sqm)}
@@ -35,12 +36,22 @@ Access: ${details.access}
 Green waste removal: ${details.wasteRemoval}
 
 Recommended service: ${result.recommended_service}
+Service zone: ${result.service_zone}
+Route fit: ${result.route_fit}
+Travel adjustment: ${result.travel_adjustment}
+Minimum booking guide: ${result.minimum_booking_guide}
+Quote confidence: ${result.quote_confidence}
 
 Starting range: ${result.starting_price_range}
+Pricing note: ${result.pricing_note || "Needs confirmation"}
 ${result.budget_friendly_option ? `\nBudget-friendly option: ${result.budget_friendly_option}` : ""}
 ${result.recommended_add_ons.length > 0 ? `\nRecommended add-ons: ${result.recommended_add_ons.join(", ")}` : ""}
 
-Could you confirm the final quote and availability?`;
+I can send 1-2 garden photos here if needed.
+
+Availability is currently limited to Friday slots.
+
+Could you confirm the final quote and Friday availability?`;
 }
 
 export function buildGardenerInternalSummary(
@@ -49,8 +60,15 @@ export function buildGardenerInternalSummary(
 ) {
   return `New garden lead
 
-Priority: ${getLeadPriority(result.lead_score)}
+Lead priority: ${result.lead_priority || getLeadPriority(result.lead_score)}
 Lead score: ${result.lead_score}/100
+Friday route fit: ${result.route_fit}
+Service zone: ${result.service_zone}
+Travel adjustment: ${result.travel_adjustment}
+Minimum booking guide: ${result.minimum_booking_guide}
+Regular customer potential: ${result.regular_customer_potential}
+Visit type: ${details.visitType}
+Quote confidence: ${result.quote_confidence}
 
 Customer:
 Name: ${details.name}
@@ -66,7 +84,10 @@ Access: ${details.access}
 Green waste: ${details.wasteRemoval}
 Selected services: ${formatSelectedServices(details, result)}
 Recommended service: ${result.recommended_service}
+Base price range: ${result.base_price_range || "Not provided"}
+Zone-adjusted range: ${result.zone_adjusted_range || "Not provided"}
 Starting range: ${result.starting_price_range}
+Pricing note: ${result.pricing_note || "Needs confirmation"}
 Budget-friendly option: ${result.budget_friendly_option || "Not provided"}
 Recommended add-ons: ${formatInlineList(result.recommended_add_ons)}
 
@@ -75,6 +96,12 @@ ${formatList(result.visible_issues)}
 
 Follow-up questions:
 ${formatList(result.follow_up_questions)}
+
+Risk flags:
+${formatList(result.risk_flags)}
+
+Photos:
+Not collected at this stage. Ask customer for 1-2 garden photos on WhatsApp if needed before confirming final quote.
 
 Internal note:
 ${result.internal_note_for_gardener}
@@ -92,6 +119,14 @@ export function buildGardenerEmailBody(
 
 Priority: ${getLeadPriority(result.lead_score)}
 Lead score: ${result.lead_score}/100
+Lead priority: ${result.lead_priority}
+Friday route fit: ${result.route_fit}
+Service zone: ${result.service_zone}
+Travel adjustment: ${result.travel_adjustment}
+Minimum booking guide: ${result.minimum_booking_guide}
+Regular customer potential: ${result.regular_customer_potential}
+Visit type: ${details.visitType}
+Quote confidence: ${result.quote_confidence}
 
 Customer details:
 Name: ${details.name}
@@ -107,7 +142,10 @@ Access: ${details.access}
 Green waste removal: ${details.wasteRemoval}
 Selected services: ${formatSelectedServices(details, result)}
 Recommended service: ${result.recommended_service}
+Base price range: ${result.base_price_range || "Not provided"}
+Zone-adjusted range: ${result.zone_adjusted_range || "Not provided"}
 Starting price range: ${result.starting_price_range}
+Pricing note: ${result.pricing_note || "Needs confirmation"}
 Budget-friendly option: ${result.budget_friendly_option || "Not provided"}
 Recommended add-ons: ${formatInlineList(result.recommended_add_ons)}
 
@@ -116,6 +154,12 @@ ${formatList(result.visible_issues)}
 
 Follow-up questions:
 ${formatList(result.follow_up_questions)}
+
+Risk flags:
+${formatList(result.risk_flags)}
+
+Photos:
+Not collected at this stage. Ask customer for 1-2 garden photos on WhatsApp if needed before confirming final quote.
 
 AI internal note:
 ${result.internal_note_for_gardener}

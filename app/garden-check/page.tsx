@@ -1,12 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   buildCustomerWhatsAppSummary,
   buildGardenerInternalSummary,
   formatEstimatedArea,
-  getLeadPriority
 } from "@/lib/leadSummaries";
 import type {
   AccessType,
@@ -14,12 +13,18 @@ import type {
   GardenAiResult,
   ServiceNeed,
   Urgency,
+  VisitType,
   WasteRemoval
 } from "@/lib/types";
 
 const urgencyOptions: Urgency[] = ["ASAP", "This week", "This month", "Just checking"];
 const wasteOptions: WasteRemoval[] = ["Yes", "No", "Not sure"];
 const accessOptions: AccessType[] = ["Rear access", "Through house", "Not sure"];
+const visitTypeOptions: VisitType[] = [
+  "One-off tidy-up",
+  "Regular maintenance",
+  "Not sure yet"
+];
 const serviceNeedOptions: ServiceNeed[] = [
   "Lawn mowing / grass cutting",
   "Hedge trimming",
@@ -31,87 +36,16 @@ const serviceNeedOptions: ServiceNeed[] = [
   "Jet washing / patio cleaning",
   "Fence repair / small outdoor repair",
   "Planting / seasonal refresh",
-  "Not sure - let AI suggest"
+  "Not sure - suggest a service"
 ];
-const maxPhotos = 4;
-const minPhotos = 2;
 
 export default function GardenCheckPage() {
-  const [photos, setPhotos] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<GardenAiResult | null>(null);
   const [submittedDetails, setSubmittedDetails] = useState<CustomerLeadDetails | null>(null);
   const [emailSent, setEmailSent] = useState<boolean | null>(null);
-  const [previews, setPreviews] = useState<Array<{ name: string; url: string }>>([]);
-  const [photoHint, setPhotoHint] = useState("Please upload at least 2 garden photos.");
   const formRef = useRef<HTMLFormElement>(null);
-  const photoInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const nextPreviews = photos.map((file) => ({ name: file.name, url: URL.createObjectURL(file) }));
-    setPreviews(nextPreviews);
-
-    return () => {
-      nextPreviews.forEach((preview) => URL.revokeObjectURL(preview.url));
-    };
-  }, [photos]);
-
-  async function handlePhotoChange(files: FileList | null) {
-    setError("");
-
-    if (!files) return;
-
-    const remainingSlots = maxPhotos - photos.length;
-    const incoming = Array.from(files);
-    const selected = incoming.slice(0, Math.max(remainingSlots, 0));
-    const invalid = selected.find((file) => !file.type.startsWith("image/"));
-
-    if (invalid) {
-      setError("Please upload images only.");
-      if (photoInputRef.current) photoInputRef.current.value = "";
-      return;
-    }
-
-    if (incoming.length > remainingSlots) {
-      setPhotoHint("You can upload up to 4 photos.");
-    }
-
-    if (selected.length === 0) {
-      if (photoInputRef.current) photoInputRef.current.value = "";
-      return;
-    }
-
-    const compressed = await Promise.all(selected.map((file) => compressImage(file)));
-    setPhotos((currentPhotos) => {
-      const nextPhotos = [...currentPhotos, ...compressed].slice(0, maxPhotos);
-      const hitUploadLimit = incoming.length > remainingSlots;
-      const nextHint = hitUploadLimit
-        ? "You can upload up to 4 photos."
-        : nextPhotos.length < minPhotos
-          ? "Please upload at least 2 garden photos."
-          : `${nextPhotos.length} photo${nextPhotos.length === 1 ? "" : "s"} selected.`;
-
-      setPhotoHint(nextHint);
-      return nextPhotos;
-    });
-
-    if (photoInputRef.current) photoInputRef.current.value = "";
-  }
-
-  function removePhoto(indexToRemove: number) {
-    setPhotos((currentPhotos) => {
-      const nextPhotos = currentPhotos.filter((_, index) => index !== indexToRemove);
-      setPhotoHint(
-        nextPhotos.length < minPhotos
-          ? "Please upload at least 2 garden photos."
-          : `${nextPhotos.length} photo${nextPhotos.length === 1 ? "" : "s"} selected.`
-      );
-      return nextPhotos;
-    });
-
-    if (photoInputRef.current) photoInputRef.current.value = "";
-  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -120,18 +54,11 @@ export default function GardenCheckPage() {
     setSubmittedDetails(null);
     setEmailSent(null);
 
-    if (photos.length < minPhotos || photos.length > maxPhotos) {
-      setError("Please upload 2 to 4 garden photos.");
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
       const form = new FormData(event.currentTarget);
       const details = readSubmittedDetails(form);
-      form.delete("photos");
-      photos.forEach((photo) => form.append("photos", photo));
 
       const response = await fetch("/api/garden-quote", {
         method: "POST",
@@ -147,8 +74,6 @@ export default function GardenCheckPage() {
       setSubmittedDetails(details);
       setEmailSent(Boolean(payload.emailSent));
       formRef.current?.reset();
-      setPhotos([]);
-      setPhotoHint("Please upload at least 2 garden photos.");
     } catch (submissionError) {
       setError(
         submissionError instanceof Error
@@ -171,12 +96,14 @@ export default function GardenCheckPage() {
             AI Garden Quote Assistant
           </h1>
           <p className="mt-5 max-w-lg text-lg leading-8 text-ink/75">
-            No long forms. Upload photos and get a quick starting range for a tidy-up,
-            rescue visit or regular maintenance.
+            Get a quick starting range for garden care around Sutton and nearby areas.
+          </p>
+          <p className="mt-3 max-w-lg text-sm leading-6 text-ink/65">
+            Limited Friday garden care slots available. Regular maintenance customers are prioritised.
           </p>
           <div className="mt-8 grid gap-3 text-sm text-ink/70 sm:grid-cols-3 lg:grid-cols-1">
             <div className="border-l-4 border-moss bg-white/55 p-4">
-              2-4 photos from different angles
+              Friday availability around Sutton
             </div>
             <div className="border-l-4 border-moss bg-white/55 p-4">
               Rough size is fine, even if it is a guess
@@ -193,7 +120,7 @@ export default function GardenCheckPage() {
               <div>
                 <h2 className="text-2xl font-semibold text-ink">Quick garden check</h2>
                 <p className="mt-2 text-sm text-ink/65">
-                  Tell us the basics and add a few photos. The AI check usually takes under a minute.
+                  Tell us the basics and get a rule-based starting estimate. The final quote is confirmed on WhatsApp.
                 </p>
               </div>
 
@@ -210,58 +137,10 @@ export default function GardenCheckPage() {
               </div>
 
               <ChoiceGroup label="Urgency" name="urgency" options={urgencyOptions} />
+              <VisitTypeGroup />
               <ChoiceGroup label="Green waste removal" name="wasteRemoval" options={wasteOptions} />
               <ChoiceGroup label="Access" name="access" options={accessOptions} />
               <ServiceNeedsGroup />
-
-              <div>
-                <label className="block text-sm font-semibold text-ink">
-                  Upload 2-4 garden photos
-                </label>
-                <label className="mt-2 flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-moss/45 bg-paper px-4 py-8 text-center transition hover:border-leaf hover:bg-white">
-                  <span className="text-base font-semibold text-leaf">Choose photos</span>
-                  <span className="mt-1 text-sm text-ink/60">
-                    JPG, PNG or WebP. We shrink large photos before upload where possible.
-                  </span>
-                  <input
-                    ref={photoInputRef}
-                    className="sr-only"
-                    name="photos"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    multiple
-                    onChange={(event) => handlePhotoChange(event.target.files)}
-                  />
-                </label>
-                <p className="mt-2 text-sm text-ink/60">{photoHint}</p>
-
-                {previews.length > 0 && (
-                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    {previews.map((preview, index) => (
-                      <div
-                        key={preview.url}
-                        className="relative overflow-hidden rounded-md border border-ink/10 bg-paper"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={preview.url}
-                          alt={preview.name}
-                          className="aspect-square w-full object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removePhoto(index)}
-                          className="focus-ring absolute right-2 top-2 rounded-full bg-white/95 px-2.5 py-1 text-xs font-semibold text-ink shadow-sm transition hover:bg-leaf hover:text-white"
-                          aria-label={`Remove ${preview.name}`}
-                        >
-                          Remove
-                        </button>
-                        <p className="truncate px-2 py-2 text-xs text-ink/65">{preview.name}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
 
               {error && (
                 <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -274,7 +153,7 @@ export default function GardenCheckPage() {
                 disabled={isSubmitting}
                 className="focus-ring w-full rounded-md bg-leaf px-5 py-4 text-base font-semibold text-white transition hover:bg-ink disabled:cursor-wait disabled:opacity-70"
               >
-                {isSubmitting ? "Checking photos and garden details..." : "Get my starting range"}
+                {isSubmitting ? "Checking route and starting range..." : "Get my starting range"}
               </button>
             </form>
           ) : submittedDetails ? (
@@ -357,24 +236,54 @@ function ChoiceGroup({
   );
 }
 
+function VisitTypeGroup() {
+  return (
+    <fieldset>
+      <legend className="text-sm font-semibold text-ink">
+        What kind of help are you looking for?
+      </legend>
+      <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {visitTypeOptions.map((option, index) => (
+          <label
+            key={option}
+            className="flex min-h-[72px] cursor-pointer items-center justify-center rounded-xl border border-ink/12 bg-paper px-4 py-3 text-center text-sm font-semibold text-ink transition hover:border-leaf hover:bg-white has-[:checked]:border-leaf has-[:checked]:bg-leaf has-[:checked]:text-white"
+          >
+            <input
+              type="radio"
+              name="visit_type"
+              value={option}
+              defaultChecked={index === 0}
+              className="sr-only"
+            />
+            <span>{option}</span>
+          </label>
+        ))}
+      </div>
+      <p className="mt-2 text-sm text-ink/60">
+        Regular maintenance means fortnightly or monthly garden care.
+      </p>
+    </fieldset>
+  );
+}
+
 function ServiceNeedsGroup() {
   return (
     <fieldset>
       <legend className="text-sm font-semibold text-ink">What do you need help with?</legend>
       <p className="mt-1 text-sm text-ink/60">
-        Choose one or more. If you're not sure, let the AI suggest it from your photos.
+        Choose one or more. If you're not sure, we can suggest a practical starting service.
       </p>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         {serviceNeedOptions.map((option) => (
           <label
             key={option}
-            className="flex cursor-pointer items-start gap-3 rounded-md border border-ink/12 bg-paper px-3 py-3 text-sm text-ink transition has-[:checked]:border-leaf has-[:checked]:bg-leaf has-[:checked]:text-white"
+            className="flex min-h-[58px] cursor-pointer items-center gap-3 rounded-lg border border-ink/12 bg-paper px-3 py-3 text-sm text-ink transition hover:border-leaf hover:bg-white has-[:checked]:border-leaf has-[:checked]:bg-leaf has-[:checked]:text-white"
           >
             <input
               type="checkbox"
               name="selected_service_needs"
               value={option}
-              className="mt-0.5 size-4 shrink-0 accent-leaf"
+              className="size-4 shrink-0 accent-leaf"
             />
             <span>{option}</span>
           </label>
@@ -419,23 +328,25 @@ function Result({
         <p>{selectedServices.join(", ")}</p>
       </ResultSection>
 
-      <ResultSection title="Garden condition">
-        {result.visible_issues.length > 0 ? (
-          <ul className="space-y-2">
-            {result.visible_issues.map((issue) => (
-              <li key={issue}>- {issue}</li>
-            ))}
-          </ul>
-        ) : (
-          <p>The photos give a useful first look, but a few details still need checking.</p>
-        )}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <ResultStat label="Visit type" value={details.visitType} />
+        <ResultStat label="Service zone" value={result.service_zone} />
+        <ResultStat label="Route fit" value={result.route_fit} />
+        <ResultStat label="Travel adjustment" value={result.travel_adjustment} />
+        <ResultStat label="Minimum booking" value={result.minimum_booking_guide} />
+        <ResultStat label="Quote confidence" value={result.quote_confidence} />
+      </div>
+
+      <ResultSection title="Friday availability note" muted>
+        <p>Availability is currently limited to Friday slots.</p>
+        <p className="mt-2">{getZoneMessage(result.service_zone)}</p>
       </ResultSection>
 
       <ResultSection title="Recommended service">
         <p className="font-semibold text-ink">{result.recommended_service}</p>
         <p className="mt-2">
-          The job looks like a {result.estimated_job_complexity.toLowerCase()} visit from the
-          photos and details provided.
+          This is based on the selected services, garden size, postcode route, access,
+          green waste and urgency.
         </p>
       </ResultSection>
 
@@ -463,6 +374,15 @@ function Result({
         <p>{buildRangeReason(result, estimatedArea)}</p>
       </ResultSection>
 
+      <ResultSection title="What could change the final quote">
+        <ul className="space-y-2">
+          <li>- Access, exact garden size, green waste volume and work required.</li>
+          <li>- Travel/time allowance: {result.travel_adjustment || "Needs confirmation"}.</li>
+          <li>- Minimum booking guide: {result.minimum_booking_guide || "Needs confirmation"}.</li>
+          <li>- Pricing note: {result.pricing_note || "Needs confirmation"}.</li>
+        </ul>
+      </ResultSection>
+
       <ResultSection title="A few things to confirm" muted>
         {result.follow_up_questions.length > 0 ? (
           <ul className="space-y-2">
@@ -478,6 +398,10 @@ function Result({
       <p className="text-sm leading-6 text-ink/60">
         This is an initial estimate. Final quote depends on access, exact garden size,
         green waste volume and the work required.
+      </p>
+      <p className="text-sm leading-6 text-ink/60">
+        Photos are not needed for this quick starting estimate. The gardener may ask for
+        1-2 photos on WhatsApp before confirming the final quote.
       </p>
 
       <NextStepCard
@@ -520,7 +444,7 @@ function NextStepCard({
     <section className="rounded-md border border-leaf/20 bg-leaf/5 p-4">
       <h3 className="text-lg font-semibold text-ink">Next step</h3>
       <p className="mt-2 text-sm leading-6 text-ink/72">
-        This is an initial AI estimate. To confirm the final quote and availability, send
+        This is an initial rule-based estimate. To confirm the final quote and availability, send
         your garden check to the gardener on WhatsApp.
       </p>
       <p className="mt-3 text-sm text-ink/62">
@@ -569,7 +493,7 @@ function GardenerLeadSummaryCard({
   gardenerSummary: string;
 }) {
   const [copied, setCopied] = useState(false);
-  const priority = getLeadPriority(result.lead_score);
+  const priority = result.lead_priority || "Low";
 
   return (
     <section className="rounded-md border border-ink/10 bg-ink/[0.03] p-4">
@@ -597,11 +521,21 @@ function GardenerLeadSummaryCard({
         <SummaryFact label="Estimated area" value={estimatedArea} />
         <SummaryFact label="Size category" value={result.size_category} />
         <SummaryFact label="Urgency" value={details.urgency} />
+        <SummaryFact label="Visit type" value={details.visitType} />
         <SummaryFact label="Access" value={details.access} />
         <SummaryFact label="Green waste removal" value={details.wasteRemoval} />
         <SummaryFact label="Selected services" value={getSelectedServices(details, result).join(", ")} />
+        <SummaryFact label="Friday route fit" value={result.route_fit} />
+        <SummaryFact label="Service zone" value={result.service_zone} />
+        <SummaryFact label="Travel adjustment" value={result.travel_adjustment} />
+        <SummaryFact label="Minimum booking guide" value={result.minimum_booking_guide} />
+        <SummaryFact label="Regular customer potential" value={result.regular_customer_potential} />
+        <SummaryFact label="Quote confidence" value={result.quote_confidence} />
         <SummaryFact label="Recommended service" value={result.recommended_service} />
+        <SummaryFact label="Base price range" value={result.base_price_range} />
+        <SummaryFact label="Zone-adjusted range" value={result.zone_adjusted_range} />
         <SummaryFact label="Starting price range" value={result.starting_price_range} />
+        <SummaryFact label="Pricing note" value={result.pricing_note} />
         <SummaryFact
           label="Budget-friendly option"
           value={result.budget_friendly_option || "Not provided"}
@@ -610,15 +544,19 @@ function GardenerLeadSummaryCard({
 
       <div className="mt-4 space-y-4 text-sm leading-6 text-ink/72">
         <div>
-          <p className="font-semibold text-ink">Visible issues</p>
+          <p className="font-semibold text-ink">Risk flags</p>
           <ul className="mt-1 space-y-1">
-            {result.visible_issues.length > 0 ? (
-              result.visible_issues.map((issue) => <li key={issue}>- {issue}</li>)
+            {result.risk_flags.length > 0 ? (
+              result.risk_flags.map((flag) => <li key={flag}>- {flag}</li>)
             ) : (
-              <li>- Needs confirmation</li>
+              <li>- No major route flags</li>
             )}
           </ul>
         </div>
+        <SummaryText
+          title="Photos"
+          body="Not collected at this stage. Ask customer for 1-2 garden photos on WhatsApp if needed before confirming final quote."
+        />
         {result.recommended_add_ons.length > 0 && (
           <div>
             <p className="font-semibold text-ink">Recommended add-ons</p>
@@ -701,41 +639,6 @@ function buildRangeReason(result: GardenAiResult, estimatedArea: string) {
   return `This range is based on ${area}, ${condition.toLowerCase()}, and the likely time needed for a ${result.estimated_job_complexity.toLowerCase()} job. Access and green waste volume can still change the final quote.`;
 }
 
-async function compressImage(file: File): Promise<File> {
-  if (!file.type.startsWith("image/") || file.size <= 2 * 1024 * 1024) {
-    return file;
-  }
-
-  const bitmap = await createImageBitmap(file);
-  const maxSide = 1800;
-  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-  const context = canvas.getContext("2d");
-
-  if (!context) return file;
-
-  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-
-  let blob: Blob | null = null;
-
-  for (const quality of [0.82, 0.72, 0.62, 0.52]) {
-    blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, "image/jpeg", quality);
-    });
-
-    if (blob && blob.size <= 2 * 1024 * 1024) break;
-  }
-
-  if (!blob || blob.size >= file.size) return file;
-
-  return new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
-    type: "image/jpeg",
-    lastModified: Date.now()
-  });
-}
-
 function readSubmittedDetails(formData: FormData): CustomerLeadDetails {
   return {
     name: readText(formData, "name"),
@@ -745,7 +648,9 @@ function readSubmittedDetails(formData: FormData): CustomerLeadDetails {
     urgency: readChoice(formData, "urgency", urgencyOptions),
     wasteRemoval: readChoice(formData, "wasteRemoval", wasteOptions),
     access: readChoice(formData, "access", accessOptions),
-    selectedServiceNeeds: readServiceNeeds(formData)
+    selectedServiceNeeds: readServiceNeeds(formData),
+    visitType: readChoice(formData, "visit_type", visitTypeOptions),
+    photoStatus: "Photos not collected at this stage"
   };
 }
 
@@ -770,13 +675,29 @@ function readServiceNeeds(formData: FormData): ServiceNeed[] {
     .filter((value): value is string => typeof value === "string")
     .filter((value): value is ServiceNeed => serviceNeedOptions.includes(value as ServiceNeed));
 
-  return values.length > 0 ? values : ["Not sure - let AI suggest"];
+  return values.length > 0 ? values : ["Not sure - suggest a service"];
 }
 
 function getSelectedServices(details: CustomerLeadDetails, result: GardenAiResult) {
   return result.selected_service_needs.length > 0
     ? result.selected_service_needs
     : details.selectedServiceNeeds;
+}
+
+function getZoneMessage(serviceZone: string) {
+  if (serviceZone === "Core Sutton route") {
+    return "You're within the core Sutton route, so this is a good fit for Friday availability.";
+  }
+
+  if (serviceZone === "Extended route") {
+    return "You're in an extended route area. This can still be a good fit, especially for regular maintenance or larger jobs.";
+  }
+
+  if (serviceZone === "Far premium route") {
+    return "You're in a farther premium route area. This is usually best for regular maintenance, larger gardens or higher-value jobs.";
+  }
+
+  return "You may be outside the usual Friday route. The gardener can review availability on WhatsApp.";
 }
 
 async function copyText(text: string, setCopied: (value: boolean) => void) {

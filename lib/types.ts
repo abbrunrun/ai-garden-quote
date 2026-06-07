@@ -2,6 +2,10 @@ export type Urgency = "ASAP" | "This week" | "This month" | "Just checking";
 export type WasteRemoval = "Yes" | "No" | "Not sure";
 export type AccessType = "Rear access" | "Through house" | "Not sure";
 export type LeadStatus = "New" | "Need info" | "Quoted" | "Booked" | "Completed";
+export type VisitType =
+  | "One-off tidy-up"
+  | "Regular maintenance"
+  | "Not sure yet";
 
 export type ServiceNeed =
   | "Lawn mowing / grass cutting"
@@ -14,7 +18,7 @@ export type ServiceNeed =
   | "Jet washing / patio cleaning"
   | "Fence repair / small outdoor repair"
   | "Planting / seasonal refresh"
-  | "Not sure - let AI suggest";
+  | "Not sure - suggest a service";
 
 export type CustomerLeadDetails = {
   name: string;
@@ -25,9 +29,22 @@ export type CustomerLeadDetails = {
   wasteRemoval: WasteRemoval;
   access: AccessType;
   selectedServiceNeeds: ServiceNeed[];
+  visitType: VisitType;
+  photoStatus: string;
 };
 
 export type GardenAiResult = {
+  estimate_type: string;
+  photo_status: string;
+  service_zone: string;
+  route_fit: "Good" | "Moderate" | "Premium only" | "Not usually covered" | string;
+  travel_adjustment: string;
+  minimum_booking_guide: string;
+  visit_type: string;
+  regular_customer_potential: "High" | "Medium" | "Low" | string;
+  lead_priority: "High" | "Medium" | "Low" | string;
+  quote_confidence: "High" | "Medium" | "Low" | string;
+  risk_flags: string[];
   selected_service_needs: string[];
   budget_friendly_option: string;
   recommended_add_ons: string[];
@@ -37,6 +54,9 @@ export type GardenAiResult = {
   size_category: string;
   recommended_service: string;
   estimated_job_complexity: string;
+  base_price_range: string;
+  zone_adjusted_range: string;
+  pricing_note: string;
   starting_price_range: string;
   follow_up_questions: string[];
   lead_score: number;

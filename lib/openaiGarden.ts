@@ -75,6 +75,15 @@ You are helping a local London gardener reply to a customer. Analyse the garden 
 Return only valid JSON with these exact keys:
 {
   "selected_service_needs": [],
+  "service_zone": "",
+  "route_fit": "",
+  "travel_adjustment": "",
+  "minimum_booking_guide": "",
+  "visit_type": "",
+  "regular_customer_potential": "",
+  "lead_priority": "",
+  "quote_confidence": "",
+  "risk_flags": [],
   "budget_friendly_option": "",
   "recommended_add_ons": [],
   "customer_reply": "",
@@ -83,6 +92,9 @@ Return only valid JSON with these exact keys:
   "size_category": "",
   "recommended_service": "",
   "estimated_job_complexity": "",
+  "base_price_range": "",
+  "zone_adjusted_range": "",
+  "pricing_note": "",
   "starting_price_range": "",
   "follow_up_questions": [],
   "lead_score": 0,
@@ -93,8 +105,11 @@ Return only valid JSON with these exact keys:
 Rules:
 - Write like a practical local London gardener: simple, friendly, plain English, not glossy, not robotic.
 - Consider customer-selected service needs, garden photos, rough garden size, access, green waste removal and urgency together.
+- The gardener is Sutton-based and currently has gardening availability on Fridays only.
+- Regular maintenance customers and good Friday route fits should be prioritised.
+- Use the supplied Sutton route context fields if present; do not ignore Friday availability.
 - If the customer selects specific services, prioritise those services unless photos clearly show a mismatch.
-- If the customer selects "Not sure - let AI suggest", infer the best service from the photos.
+- If the customer selects "Not sure - suggest a service", infer a practical starting service from the customer details.
 - If the customer selects a budget-friendly service such as lawn mowing, weeding or basic tidy-up, do not automatically upsell to a full garden tidy-up unless the photos show the garden is too overgrown for the simpler service.
 - If the customer selects lawn mowing only but the garden looks heavily overgrown, explain that it may need an overgrown garden clearance first.
 - If the customer selects hedge trimming, ask about hedge height and green waste volume if unclear.
@@ -162,6 +177,18 @@ const GARDEN_RESULT_SCHEMA = {
         type: "array",
         items: { type: "string" }
       },
+      service_zone: { type: "string" },
+      route_fit: { type: "string" },
+      travel_adjustment: { type: "string" },
+      minimum_booking_guide: { type: "string" },
+      visit_type: { type: "string" },
+      regular_customer_potential: { type: "string" },
+      lead_priority: { type: "string" },
+      quote_confidence: { type: "string" },
+      risk_flags: {
+        type: "array",
+        items: { type: "string" }
+      },
       budget_friendly_option: { type: "string" },
       recommended_add_ons: {
         type: "array",
@@ -176,6 +203,9 @@ const GARDEN_RESULT_SCHEMA = {
       size_category: { type: "string" },
       recommended_service: { type: "string" },
       estimated_job_complexity: { type: "string" },
+      base_price_range: { type: "string" },
+      zone_adjusted_range: { type: "string" },
+      pricing_note: { type: "string" },
       starting_price_range: { type: "string" },
       follow_up_questions: {
         type: "array",
@@ -188,6 +218,15 @@ const GARDEN_RESULT_SCHEMA = {
     },
     required: [
       "selected_service_needs",
+      "service_zone",
+      "route_fit",
+      "travel_adjustment",
+      "minimum_booking_guide",
+      "visit_type",
+      "regular_customer_potential",
+      "lead_priority",
+      "quote_confidence",
+      "risk_flags",
       "budget_friendly_option",
       "recommended_add_ons",
       "customer_reply",
@@ -196,6 +235,9 @@ const GARDEN_RESULT_SCHEMA = {
       "size_category",
       "recommended_service",
       "estimated_job_complexity",
+      "base_price_range",
+      "zone_adjusted_range",
+      "pricing_note",
       "starting_price_range",
       "follow_up_questions",
       "lead_score",
@@ -212,13 +254,15 @@ Customer details:
 - Contact: ${details.contact}
 - Postcode: ${details.postcode}
 - Rough garden size: ${details.roughSize}
-- Selected service needs: ${details.selectedServiceNeeds.join(", ") || "Not sure - let AI suggest"}
+- Selected service needs: ${details.selectedServiceNeeds.join(", ") || "Not sure - suggest a service"}
+- Visit type: ${details.visitType}
+- Photo status: ${details.photoStatus}
 - Urgency: ${details.urgency}
 - Green waste removal: ${details.wasteRemoval}
 - Access: ${details.access}
 
 Create a concise customer-facing recommendation, a starting price range and an internal gardener note.
-Use the uploaded images as evidence, but mention uncertainty where needed. Keep the tone friendly and practical, like a London gardener giving an initial view from photos.
+Use the customer details as evidence, but mention uncertainty where needed. Keep the tone friendly and practical, like a London gardener giving an initial view before confirming the final quote.
 `.trim();
 }
 

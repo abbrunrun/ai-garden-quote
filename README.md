@@ -5,11 +5,10 @@ MVP web app for a London gardening business. Customers upload garden photos, add
 ## Features
 
 - Customer page at `/garden-check`
-- Upload 2-4 garden photos
-- Browser-side image compression to roughly under 2 MB where possible
-- Server-side image validation
+- Rule-based Sutton Friday route estimates without collecting photos
+- Visit type, selected services, postcode zone, access, green waste and urgency used for deterministic pricing
 - Optional private Supabase Storage uploads to `garden-uploads`
-- OpenAI Responses API vision analysis using base64 data URLs
+- OpenAI estimate support remains opt-in only with `USE_OPENAI_ESTIMATE=true`
 - Safe fallback if AI JSON parsing fails
 - Full lead saved to the `leads` table when Supabase is enabled
 - Customer WhatsApp CTA with copyable garden check summary
@@ -26,6 +25,7 @@ Create `.env.local` from `.env.example`:
 ```bash
 OPENAI_API_KEY=your_openai_key
 OPENAI_MODEL=gpt-4.1-mini
+USE_OPENAI_ESTIMATE=false
 NEXT_PUBLIC_SUPABASE_URL=https://ivfhasfnckbcmqagmrgq.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
@@ -40,6 +40,8 @@ EMAIL_FROM=AI Garden Quote <onboarding@resend.dev>
 Only `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are safe for browser exposure. `OPENAI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `ADMIN_PASSWORD` are used only server-side.
 
 Set `SKIP_SUPABASE=true` when Supabase is unavailable. The customer flow will still read uploaded images from the request, send base64 data URLs to OpenAI, and show the AI result. Leads and images will not be saved while this flag is enabled.
+
+Set `USE_OPENAI_ESTIMATE=false` for deterministic production pricing. In this mode, starting ranges, route fit, travel adjustments, quote confidence and lead priority are calculated locally from the form details and Sutton route rules. The current customer journey does not collect photos.
 
 Set `NEXT_PUBLIC_GARDENER_WHATSAPP_NUMBER` to the gardener's WhatsApp number in international format without `+`, spaces or punctuation. Example: `447712345678`.
 
@@ -101,8 +103,6 @@ Then open:
 4. Make sure `OPENAI_MODEL` is set, for example `gpt-4.1-mini`.
 5. Deploy.
 6. Visit `/garden-check` for customers and `/admin/leads` for the private dashboard.
-
-The implementation sends OpenAI the uploaded images as base64 data URLs from the server route. This avoids public Supabase URLs and works with the private `garden-uploads` bucket.
 
 The customer result includes a WhatsApp button that opens `wa.me` with a prefilled garden check summary, plus copy buttons for both customer and gardener summaries. If the gardener email sends successfully, the customer sees a small confirmation note; otherwise the page simply points them to WhatsApp.
 
